@@ -12,22 +12,22 @@ munge.R = read.csv("/Users/ahaynes/Downloads/QAQC'd_doc.csv")
 by_sample_location = munge.R %>% group_by(sample_location)
 
 #calculate the confidence intervals by using the mean of each sample location
-#and the standard error of the sample location
-conf_calc = by_sample_location %>% 
+#and the standard deviation of the sample location
+stand_dev_calc = by_sample_location %>% 
   summarise(
     mean_conc_ppm = mean(concentration_ppm),
-    se = sd(concentration_ppm, na.rm = TRUE)/sqrt(length(na.omit(concentration_ppm)))
-    )
+    stand_dev = sd(concentration_ppm, na.rm = TRUE)
+  )
 
 #calculate the upper and lower confidence interval limit
-#https://www.youtube.com/watch?v=gdCvrpPZyRQ&ab_channel=MatthewE.Clapham
-conf_calc$upper_conf_int = conf_calc$mean_conc_ppm + (1.96 * conf_calc$se)
-conf_calc$lower_conf_int = conf_calc$mean_conc_ppm - (1.96 * conf_calc$se)
+
+stand_dev_calc$upper_2stdev = stand_dev_calc$mean_conc_ppm + (stand_dev_calc$stand_dev *2)
+stand_dev_calc$lower_2stdev = stand_dev_calc$mean_conc_ppm + (stand_dev_calc$stand_dev* -2)
 
 #merge the calculations to the data grouped by confidence interval by pairing
 #your calculations to the to the sample locations on the 'by_sample_location'
 #dataframe
-final = list(by_sample_location, conf_calc)
+final = list(by_sample_location, stand_dev_calc)
 final = final %>% reduce(full_join, by='sample_location')
 
 #create a column for placing flagging values in
@@ -43,7 +43,7 @@ final$"Flagged_Value_1" = NA
 for (i in 1:nrow(final)) {
   #if the upper and lower confidence interval in 'row i' is NA, then flag it
   #with a value 1, which is suspect data.
-  if (is.na(final$upper_conf_int[i] && final$lower_conf_int[i])){
+  if (is.na(final$upper_2stdev[i] && final$lower_2stdev[i])){
     final$`Flagged_Value_1` [i]= '1'
     #if the concentration ppm is missing, then assign a -1 value to the 
     #`Flagged_Value_-1` column
@@ -52,8 +52,8 @@ for (i in 1:nrow(final)) {
     #if the concentration ppm is greater than the upper confidence level value 
     #OR if the concentration ppm is less than the lower confidence level value,
     #then flag it with a value -2.
-  } else if(final$concentration_ppm[i] > final$upper_conf_int[i] | 
-            final$concentration_ppm[i] < final$lower_conf_int[i]){
+  } else if(final$concentration_ppm[i] > final$upper_2stdev[i] | 
+            final$concentration_ppm[i] < final$lower_2stdev[i]){
     final$`Flagged_Value_-2`[i]= '-2'
     #if the concentration ppm is greater than the upper detection limit 
     #OR if the concentration ppm is less than the lower detection limit,
